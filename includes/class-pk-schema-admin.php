@@ -30,14 +30,14 @@ class PK_Schema_Admin {
             'pk-schema-plugin',
             'Data Inspector',
             'Data Inspector',
-            'manage_options',
+            'administrator',
             'pk-schema-plugin-inspector',
             array($this, 'render_inspector_page')
         );
     }
 
     public function render_inspector_page() {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('administrator')) {
             return;
         }
 
@@ -173,7 +173,7 @@ class PK_Schema_Admin {
      * TODO: tijdelijk t.b.v. testfase — weghalen zodra de inspector niet meer nodig is.
      */
     public function handle_download() {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('administrator')) {
             wp_die('Geen toegang.');
         }
 

@@ -76,7 +76,7 @@ class PK_Schema_Settings {
         add_menu_page(
             'Pageking Schema',
             'Schema Plugin',
-            'manage_options',
+            'administrator',
             'pk-schema-plugin',
             array($this, 'render_settings_page'),
             'dashicons-code-standards'
@@ -184,7 +184,7 @@ class PK_Schema_Settings {
     }
 
     public function render_settings_page() {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('administrator')) {
             return;
         }
 
@@ -332,7 +332,7 @@ class PK_Schema_Settings {
     }
 
     public function handle_save() {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('administrator')) {
             wp_die('Geen toegang.');
         }
 
