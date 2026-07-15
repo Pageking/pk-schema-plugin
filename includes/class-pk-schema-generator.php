@@ -274,18 +274,44 @@ class PK_Schema_Generator {
     /**
      * Zelfde principe als PK_Schema_Builder_Base::resolve_concept() — eerst de
      * handmatige veldmapping uit de instellingenpagina, pas daarna de
-     * kandidatenlijst-gok. Losse implementatie omdat de generator geen
-     * builder-subklasse is en hier met een post_type-string werkt i.p.v. WP_Post
-     * (de FAQPage-archiefopbouw heeft geen los post-object per se).
+     * kandidatenlijst-gok (die zowel ACF-velden als taxonomieën met diezelfde
+     * namen probeert — data zit niet altijd in een los veld). Losse
+     * implementatie omdat de generator geen builder-subklasse is en hier met
+     * een post_type-string werkt i.p.v. WP_Post (de FAQPage-archiefopbouw
+     * heeft geen los post-object per se).
      */
     private function resolve_concept($post_type, array $data, $concept, array $fallback_keys) {
-        $mapped_field = PK_Schema_Settings::get_mapped_field($post_type, $concept);
+        $mapped = PK_Schema_Settings::get_mapped_field($post_type, $concept);
 
-        if ($mapped_field && !empty($data['acf'][$mapped_field])) {
-            return $data['acf'][$mapped_field];
+        if ($mapped) {
+            if (strpos($mapped, 'tax:') === 0) {
+                $taxonomy = substr($mapped, 4);
+                if (!empty($data['taxonomies'][$taxonomy])) {
+                    $terms = $data['taxonomies'][$taxonomy];
+                    return count($terms) === 1 ? $terms[0] : implode(', ', $terms);
+                }
+            } else {
+                $field = strpos($mapped, 'acf:') === 0 ? substr($mapped, 4) : $mapped;
+                if (!empty($data['acf'][$field])) {
+                    return $data['acf'][$field];
+                }
+            }
         }
 
-        return $this->find_first_value($data['acf'] ?? array(), $fallback_keys);
+        $value = $this->find_first_value($data['acf'] ?? array(), $fallback_keys);
+
+        if ($value !== null) {
+            return $value;
+        }
+
+        foreach ($fallback_keys as $key) {
+            if (!empty($data['taxonomies'][$key])) {
+                $terms = $data['taxonomies'][$key];
+                return count($terms) === 1 ? $terms[0] : implode(', ', $terms);
+            }
+        }
+
+        return null;
     }
 
     /**

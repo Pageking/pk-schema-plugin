@@ -133,6 +133,22 @@ class PK_Schema_Settings {
     }
 
     /**
+     * Alle taxonomieën die aan een post type hangen, als [slug => label] —
+     * t.b.v. de mapping-dropdowns. Data zit niet altijd in een los ACF-veld;
+     * soms hangt het concept (bv. merk, locatie) juist als taxonomie-term
+     * aan de post.
+     */
+    public static function get_taxonomies_for_post_type($post_type) {
+        $taxonomies = array();
+
+        foreach (get_object_taxonomies($post_type, 'objects') as $taxonomy) {
+            $taxonomies[$taxonomy->name] = $taxonomy->label;
+        }
+
+        return $taxonomies;
+    }
+
+    /**
      * Slimme suggestie voor het Schema-type, puur als startpunt voor de
      * dropdown — de gebruiker kan dit altijd zelf overschrijven. Post type
      * namen verschillen per klantsite, dus dit is bewust een heuristiek op
@@ -273,22 +289,23 @@ class PK_Schema_Settings {
         }
 
         echo '<h2>Veldmapping</h2>';
-        echo '<p>Voor deze post types kent het gekozen Schema-type velden die per site kunnen verschillen (bv. salaris, sluitingsdatum). Koppel hieronder het juiste ACF-veld. Laat op "— automatisch —" staan om de ingebouwde gok te laten gelden.</p>';
+        echo '<p>Voor deze post types kent het gekozen Schema-type velden die per site kunnen verschillen (bv. salaris, sluitingsdatum, merk). Dat kan in een ACF-veld zitten, maar net zo goed in een taxonomie-term. Koppel hieronder de juiste bron. Laat op "— automatisch —" staan om de ingebouwde gok te laten gelden.</p>';
 
         foreach ($relevant as $post_type) {
             $schema_type = $schema_map[$post_type->name];
             $concepts = self::FIELD_CONCEPTS[$schema_type];
             $available_fields = self::get_acf_fields_for_post_type($post_type->name);
+            $available_taxonomies = self::get_taxonomies_for_post_type($post_type->name);
 
             echo '<h3>' . esc_html($post_type->labels->name) . ' <code>(' . esc_html($post_type->name) . ')</code> — ' . esc_html($schema_type) . '</h3>';
 
-            if (empty($available_fields)) {
-                echo '<p><em>Geen ACF-velden gevonden voor dit post type.</em></p>';
+            if (empty($available_fields) && empty($available_taxonomies)) {
+                echo '<p><em>Geen ACF-velden of taxonomieën gevonden voor dit post type.</em></p>';
                 continue;
             }
 
             echo '<table class="wp-list-table widefat fixed striped" style="max-width:700px;margin-bottom:2em;">';
-            echo '<thead><tr><th>Schema-concept</th><th>ACF-veld</th></tr></thead><tbody>';
+            echo '<thead><tr><th>Schema-concept</th><th>Bron</th></tr></thead><tbody>';
 
             foreach ($concepts as $concept => $label) {
                 $current = self::get_mapped_field($post_type->name, $concept);
@@ -297,14 +314,34 @@ class PK_Schema_Settings {
                 echo '<tr><td>' . esc_html($label) . '</td><td><select name="' . $field_name . '">';
                 echo '<option value="">— automatisch —</option>';
 
-                foreach ($available_fields as $field_key => $field_label) {
-                    printf(
-                        '<option value="%s" %s>%s (%s)</option>',
-                        esc_attr($field_key),
-                        selected($current, $field_key, false),
-                        esc_html($field_label),
-                        esc_html($field_key)
-                    );
+                if (!empty($available_fields)) {
+                    echo '<optgroup label="ACF-velden">';
+                    foreach ($available_fields as $field_key => $field_label) {
+                        $value = 'acf:' . $field_key;
+                        printf(
+                            '<option value="%s" %s>%s (%s)</option>',
+                            esc_attr($value),
+                            selected($current, $value, false),
+                            esc_html($field_label),
+                            esc_html($field_key)
+                        );
+                    }
+                    echo '</optgroup>';
+                }
+
+                if (!empty($available_taxonomies)) {
+                    echo '<optgroup label="Taxonomieën">';
+                    foreach ($available_taxonomies as $tax_key => $tax_label) {
+                        $value = 'tax:' . $tax_key;
+                        printf(
+                            '<option value="%s" %s>%s (%s)</option>',
+                            esc_attr($value),
+                            selected($current, $value, false),
+                            esc_html($tax_label),
+                            esc_html($tax_key)
+                        );
+                    }
+                    echo '</optgroup>';
                 }
 
                 echo '</select></td></tr>';
@@ -376,23 +413,35 @@ class PK_Schema_Settings {
                 ? array_keys(self::FIELD_CONCEPTS[$schema_map[$post_type]])
                 : array();
 
-            // Alleen echt bestaande ACF-velden van dít post type accepteren —
-            // voorkomt dat een geknoeide request een willekeurige meta-key opslaat.
-            $valid_fields = array_keys(self::get_acf_fields_for_post_type($post_type));
+            // Alleen echt bestaande ACF-velden/taxonomieën van dít post type
+            // accepteren — voorkomt dat een geknoeide request een willekeurige
+            // meta-key of taxonomie opslaat. sanitize_key() sloopt de ':' uit
+            // 'acf:'/'tax:', dus hier bewust sanitize_text_field() + een
+            // expliciete whitelist-check i.p.v. sanitize_key().
+            $valid_acf_fields = array_keys(self::get_acf_fields_for_post_type($post_type));
+            $valid_taxonomies = array_keys(self::get_taxonomies_for_post_type($post_type));
 
-            foreach ((array) $concepts as $concept => $field_name) {
+            foreach ((array) $concepts as $concept => $mapped_value) {
                 $concept = sanitize_key($concept);
-                $field_name = sanitize_key($field_name);
+                $mapped_value = sanitize_text_field($mapped_value);
 
-                if (!in_array($concept, $valid_concepts, true) || $field_name === '') {
+                if (!in_array($concept, $valid_concepts, true) || $mapped_value === '') {
                     continue;
                 }
 
-                if (!in_array($field_name, $valid_fields, true)) {
+                if (strpos($mapped_value, 'tax:') === 0) {
+                    $is_valid = in_array(substr($mapped_value, 4), $valid_taxonomies, true);
+                } elseif (strpos($mapped_value, 'acf:') === 0) {
+                    $is_valid = in_array(substr($mapped_value, 4), $valid_acf_fields, true);
+                } else {
+                    $is_valid = false;
+                }
+
+                if (!$is_valid) {
                     continue;
                 }
 
-                $field_map[$post_type][$concept] = $field_name;
+                $field_map[$post_type][$concept] = $mapped_value;
             }
         }
 

@@ -81,17 +81,54 @@ abstract class PK_Schema_Builder_Base {
     }
 
     /**
-     * Haalt een Schema-concept op: eerst de handmatige veldmapping uit de
-     * instellingenpagina (PK_Schema_Settings::FIELD_CONCEPTS), en pas als daar
-     * niets is ingesteld de ingebouwde kandidatenlijst-gok als fallback.
+     * Zelfde idee als find_acf_value(), maar dan voor taxonomieën — data zit
+     * lang niet altijd in een los veld, soms hangt het concept (bv. merk,
+     * locatie) juist als taxonomie-term aan de post. Een taxonomie kan
+     * meerdere termen hebben; bij precies één term geven we die terug, bij
+     * meerdere joinen we ze (beter dan alleen de eerste stilzwijgend te pakken).
      */
-    protected function resolve_concept($post, array $data, $concept, array $fallback_keys) {
-        $mapped_field = PK_Schema_Settings::get_mapped_field($post->post_type, $concept);
-
-        if ($mapped_field && !empty($data['acf'][$mapped_field])) {
-            return $data['acf'][$mapped_field];
+    protected function find_taxonomy_value(array $data, array $possible_keys) {
+        foreach ($possible_keys as $key) {
+            if (!empty($data['taxonomies'][$key])) {
+                $terms = $data['taxonomies'][$key];
+                return count($terms) === 1 ? $terms[0] : implode(', ', $terms);
+            }
         }
 
-        return $this->find_acf_value($data, $fallback_keys);
+        return null;
+    }
+
+    /**
+     * Haalt een Schema-concept op: eerst de handmatige veldmapping uit de
+     * instellingenpagina (PK_Schema_Settings::FIELD_CONCEPTS), en pas als daar
+     * niets is ingesteld de ingebouwde kandidatenlijst-gok als fallback — die
+     * gok probeert zowel ACF-velden als taxonomieën met diezelfde namen.
+     *
+     * De mapping-waarde heeft een 'acf:' of 'tax:' prefix om aan te geven
+     * waar hij vandaan komt (zie PK_Schema_Settings::render_field_mapping()).
+     * Een ongeprefixte waarde wordt als ACF behandeld, voor compatibiliteit
+     * met mappings die vóór de taxonomie-ondersteuning zijn opgeslagen.
+     */
+    protected function resolve_concept($post, array $data, $concept, array $fallback_keys) {
+        $mapped = PK_Schema_Settings::get_mapped_field($post->post_type, $concept);
+
+        if ($mapped) {
+            if (strpos($mapped, 'tax:') === 0) {
+                $taxonomy = substr($mapped, 4);
+                if (!empty($data['taxonomies'][$taxonomy])) {
+                    $terms = $data['taxonomies'][$taxonomy];
+                    return count($terms) === 1 ? $terms[0] : implode(', ', $terms);
+                }
+            } else {
+                $field = strpos($mapped, 'acf:') === 0 ? substr($mapped, 4) : $mapped;
+                if (!empty($data['acf'][$field])) {
+                    return $data['acf'][$field];
+                }
+            }
+        }
+
+        $value = $this->find_acf_value($data, $fallback_keys);
+
+        return $value !== null ? $value : $this->find_taxonomy_value($data, $fallback_keys);
     }
 }
