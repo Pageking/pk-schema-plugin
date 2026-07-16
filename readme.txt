@@ -4,7 +4,7 @@ Tags: schema, seo, structured data, json-ld
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 0.1.3
+Stable tag: 0.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,10 @@ Belangrijkste onderdelen:
 3. Ga naar 'Schema Plugin' in het wp-admin-menu om post types te activeren en Schema-types te kiezen.
 
 == Changelog ==
+
+= 0.1.4 =
+* Nieuw: optionele AI-herkenning (OpenAI) als laatste redmiddel voor Schema-velden die nergens via veldmapping, ACF of taxonomie te vinden zijn — bv. functie-eisen die als losse tekst in een WYSIWYG-veld binnen een repeater staan. Opt-in via de instellingenpagina, draait op de achtergrond bij het opslaan van een post (nooit live bij een paginaweergave), resultaat wordt gecached.
+* JobPosting-schema uitgebreid met qualifications en responsibilities.
 
 = 0.1.3 =
 * readme.txt zat er in 0.1.2 nog niet echt in (verkeerd zonder versiebump toegevoegd) — nu met een échte versiebump, zodat sites die al op 0.1.2 stonden de changelog alsnog binnenkrijgen bij deze update.

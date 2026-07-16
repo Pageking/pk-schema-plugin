@@ -64,6 +64,20 @@ class PK_Schema_Builder_JobPosting extends PK_Schema_Builder_Base {
                 : (string) $work_hours;
         }
 
+        // Deze twee hebben zelden een voor de hand liggende ACF-veldnaam om te
+        // gokken — functie-eisen/taken staan doorgaans als losse bullets in een
+        // WYSIWYG-veld (vaak binnen een repeater), niet in een los tekstveld.
+        // Dat maakt ze de belangrijkste kandidaten voor de AI-herkenningslaag.
+        $qualifications = $this->resolve_concept($post, $data, 'qualifications', array('functie_eisen', 'eisen', 'qualifications'));
+        if ($qualifications) {
+            $schema['qualifications'] = $this->clean_text($qualifications);
+        }
+
+        $responsibilities = $this->resolve_concept($post, $data, 'responsibilities', array('taken', 'verantwoordelijkheden', 'responsibilities'));
+        if ($responsibilities) {
+            $schema['responsibilities'] = $this->clean_text($responsibilities);
+        }
+
         return $schema;
     }
 

@@ -100,9 +100,12 @@ abstract class PK_Schema_Builder_Base {
 
     /**
      * Haalt een Schema-concept op: eerst de handmatige veldmapping uit de
-     * instellingenpagina (PK_Schema_Settings::FIELD_CONCEPTS), en pas als daar
-     * niets is ingesteld de ingebouwde kandidatenlijst-gok als fallback — die
-     * gok probeert zowel ACF-velden als taxonomieën met diezelfde namen.
+     * instellingenpagina (PK_Schema_Settings::FIELD_CONCEPTS), dan de
+     * ingebouwde kandidatenlijst-gok (ACF + taxonomie), en als allerlaatste
+     * redmiddel — alleen als AI-herkenning aanstaat — de door OpenAI
+     * geëxtraheerde waarde uit vrije tekst (zie PK_Schema_AI_Extractor).
+     * Die AI-stap draait nooit hier live; dit leest alleen de cache die bij
+     * het opslaan van de post al is opgebouwd.
      *
      * De mapping-waarde heeft een 'acf:' of 'tax:' prefix om aan te geven
      * waar hij vandaan komt (zie PK_Schema_Settings::render_field_mapping()).
@@ -129,6 +132,14 @@ abstract class PK_Schema_Builder_Base {
 
         $value = $this->find_acf_value($data, $fallback_keys);
 
-        return $value !== null ? $value : $this->find_taxonomy_value($data, $fallback_keys);
+        if ($value === null) {
+            $value = $this->find_taxonomy_value($data, $fallback_keys);
+        }
+
+        if ($value === null && PK_Schema_Settings::is_ai_enabled()) {
+            $value = PK_Schema_AI_Extractor::get_extracted_value($post->ID, $concept);
+        }
+
+        return $value;
     }
 }

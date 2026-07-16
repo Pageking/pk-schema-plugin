@@ -311,6 +311,13 @@ class PK_Schema_Generator {
             }
         }
 
+        // Laatste redmiddel: de door OpenAI geëxtraheerde cache (alleen als
+        // AI-herkenning aanstaat). Leest alleen de cache, roept nooit de API
+        // hier live aan — zie PK_Schema_AI_Extractor.
+        if (PK_Schema_Settings::is_ai_enabled() && !empty($data['core']['ID'])) {
+            return PK_Schema_AI_Extractor::get_extracted_value($data['core']['ID'], $concept);
+        }
+
         return null;
     }
 

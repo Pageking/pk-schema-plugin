@@ -14,6 +14,8 @@ class PK_Schema_Settings {
     const OPTION_KEY      = 'pk_schema_enabled_post_types';
     const SCHEMA_TYPE_KEY = 'pk_schema_type_map';
     const FIELD_MAP_KEY   = 'pk_schema_field_map';
+    const AI_ENABLED_KEY  = 'pk_schema_ai_enabled';
+    const AI_API_KEY_OPTION = 'pk_schema_openai_api_key';
 
     /**
      * Schema-concepten die per Schema-type site-specifiek gemapt kunnen
@@ -29,11 +31,13 @@ class PK_Schema_Settings {
             'brand'        => 'Merk',
         ),
         'JobPosting' => array(
-            'valid_through'   => 'Sluitingsdatum',
-            'employment_type' => 'Dienstverband',
-            'location'        => 'Locatie',
-            'salary'          => 'Salaris(indicatie)',
-            'work_hours'      => 'Uren per week / werktijden',
+            'valid_through'    => 'Sluitingsdatum',
+            'employment_type'  => 'Dienstverband',
+            'location'         => 'Locatie',
+            'salary'           => 'Salaris(indicatie)',
+            'work_hours'       => 'Uren per week / werktijden',
+            'qualifications'   => 'Functie-eisen (vaak in een WYSIWYG/repeater — geschikt voor AI-herkenning)',
+            'responsibilities' => 'Taken/verantwoordelijkheden (vaak in een WYSIWYG/repeater — geschikt voor AI-herkenning)',
         ),
         'Person' => array(
             'job_title' => 'Functietitel',
@@ -109,6 +113,28 @@ class PK_Schema_Settings {
     public static function get_mapped_field($post_type, $concept) {
         $map = get_option(self::FIELD_MAP_KEY, array());
         return isset($map[$post_type][$concept]) ? $map[$post_type][$concept] : '';
+    }
+
+    /**
+     * AI-herkenning (OpenAI) is alleen actief als de beheerder 'm expliciet
+     * heeft aangezet ÉN er een API-key beschikbaar is. Bewust geen default-aan
+     * — content van de klantsite gaat dan naar een externe partij.
+     */
+    public static function is_ai_enabled() {
+        return (bool) get_option(self::AI_ENABLED_KEY, false) && self::get_openai_api_key() !== '';
+    }
+
+    /**
+     * Een constante in wp-config.php overschrijft de optie — zelfde patroon
+     * als PK_SCHEMA_UPDATE_CHANNEL, en veiliger dan de key in de database
+     * te bewaren (de instellingenpagina blijft werken als simpel alternatief).
+     */
+    public static function get_openai_api_key() {
+        if (defined('PK_SCHEMA_OPENAI_API_KEY') && PK_SCHEMA_OPENAI_API_KEY !== '') {
+            return PK_SCHEMA_OPENAI_API_KEY;
+        }
+
+        return (string) get_option(self::AI_API_KEY_OPTION, '');
     }
 
     /**
@@ -265,6 +291,7 @@ class PK_Schema_Settings {
         echo '</tbody></table>';
 
         $this->render_field_mapping($post_types, $enabled, $schema_map);
+        $this->render_ai_settings();
 
         submit_button('Opslaan');
         echo '</form>';
@@ -349,6 +376,42 @@ class PK_Schema_Settings {
 
             echo '</tbody></table>';
         }
+    }
+
+    /**
+     * AI-herkenning: als een concept écht nergens gemapt of geraden kan
+     * worden (bv. functie-eisen die in een WYSIWYG binnen een repeater
+     * staan), kan OpenAI als laatste redmiddel de vrije tekst van de post
+     * doorzoeken. Bewust standaard uit — content gaat dan naar een externe
+     * partij, dus dit moet een bewuste keuze per site zijn.
+     */
+    private function render_ai_settings() {
+        $enabled = (bool) get_option(self::AI_ENABLED_KEY, false);
+        $has_constant_key = defined('PK_SCHEMA_OPENAI_API_KEY') && PK_SCHEMA_OPENAI_API_KEY !== '';
+        $option_key = get_option(self::AI_API_KEY_OPTION, '');
+
+        echo '<h2>AI-herkenning (optioneel)</h2>';
+        echo '<p>Voor velden die nergens in een los ACF-veld of taxonomie te vinden zijn — bijvoorbeeld functie-eisen die als losse bullets in een WYSIWYG-veld binnen een repeater staan — kan de plugin als laatste redmiddel OpenAI de tekst van de post laten doorzoeken. <strong>Let op:</strong> hiermee gaat content van deze site naar OpenAI. Zet dit alleen aan als dat past bij het privacybeleid van deze klant.</p>';
+
+        echo '<table class="form-table"><tbody>';
+
+        echo '<tr><th scope="row">Actief</th><td>';
+        echo '<label><input type="checkbox" name="pk_schema_ai_enabled" value="1" ' . checked($enabled, true, false) . ' /> Gebruik OpenAI om ontbrekende velden uit vrije tekst te herkennen</label>';
+        echo '</td></tr>';
+
+        echo '<tr><th scope="row">OpenAI API-key</th><td>';
+        if ($has_constant_key) {
+            echo '<p><em>Ingesteld via de constante <code>PK_SCHEMA_OPENAI_API_KEY</code> in wp-config.php — het veld hieronder wordt genegeerd.</em></p>';
+        } else {
+            printf(
+                '<input type="password" name="pk_schema_openai_api_key" value="%s" class="regular-text" autocomplete="off" />',
+                esc_attr($option_key)
+            );
+            echo '<p class="description">Voor extra veiligheid kun je in plaats hiervan ook <code>define(\'PK_SCHEMA_OPENAI_API_KEY\', \'sk-...\');</code> in wp-config.php zetten — dat overschrijft dit veld.</p>';
+        }
+        echo '</td></tr>';
+
+        echo '</tbody></table>';
     }
 
     private function render_schema_type_select($post_type_name, $current_value) {
@@ -448,6 +511,14 @@ class PK_Schema_Settings {
         update_option(self::OPTION_KEY, $selected);
         update_option(self::SCHEMA_TYPE_KEY, $schema_map);
         update_option(self::FIELD_MAP_KEY, $field_map);
+
+        update_option(self::AI_ENABLED_KEY, !empty($_POST['pk_schema_ai_enabled']));
+
+        // Alleen opslaan als er geen wp-config-constante is — anders zou een
+        // leeg formulierveld de constante-waarde in de DB stilletjes overschrijven.
+        if (!defined('PK_SCHEMA_OPENAI_API_KEY') && isset($_POST['pk_schema_openai_api_key'])) {
+            update_option(self::AI_API_KEY_OPTION, sanitize_text_field($_POST['pk_schema_openai_api_key']));
+        }
 
         $redirect_url = add_query_arg('pk_schema_saved', '1', admin_url('admin.php?page=pk-schema-plugin'));
         wp_safe_redirect($redirect_url);

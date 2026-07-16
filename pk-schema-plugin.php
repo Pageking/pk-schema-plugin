@@ -3,7 +3,7 @@
  * Plugin Name: Pageking Schema Plugin
  * Plugin URI: https://pageking.nl
  * Description: Analyseert content per post type en bouwt automatisch Schema.org markup voor zoekmachines.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: Pageking
  * Author URI: https://pageking.nl
  * License: GPL-2.0+
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('PK_SCHEMA_VERSION', '0.1.3');
+define('PK_SCHEMA_VERSION', '0.1.4');
 define('PK_SCHEMA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('PK_SCHEMA_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -62,6 +62,7 @@ require_once PK_SCHEMA_PLUGIN_PATH . 'includes/class-pk-schema-generator.php';
 require_once PK_SCHEMA_PLUGIN_PATH . 'includes/class-pk-schema-frontend.php';
 require_once PK_SCHEMA_PLUGIN_PATH . 'includes/class-pk-schema-cache.php';
 require_once PK_SCHEMA_PLUGIN_PATH . 'includes/class-pk-schema-validator.php';
+require_once PK_SCHEMA_PLUGIN_PATH . 'includes/class-pk-schema-ai-extractor.php';
 
 // Initialize the plugin
 function pk_schema_init() {
@@ -69,5 +70,6 @@ function pk_schema_init() {
     new PK_Schema_Admin();
     new PK_Schema_Frontend();
     new PK_Schema_Cache();
+    new PK_Schema_AI_Extractor();
 }
 add_action('plugins_loaded', 'pk_schema_init');
